@@ -60,17 +60,11 @@ static void pc_system_parse_sev_metadata(uint8_t *flash_ptr, size_t flash_size)
     memcpy(fw_sev_metadata_table, metadata, metadata->len);
 }
 
-void pc_system_parse_fw_tables(uint8_t *flash_ptr, size_t flash_size)
+bool pc_system_parse_fw_tables(uint8_t *flash_ptr, size_t flash_size)
 {
     uint8_t *ptr;
     QemuUUID guid;
     int tot_len;
-
-    fw_flash_parsed = true;
-
-    if (flash_size < TARGET_PAGE_SIZE) {
-        return;
-    }
 
     /*
      * if this is a FW with tables there will be a table footer
@@ -82,7 +76,7 @@ void pc_system_parse_fw_tables(uint8_t *flash_ptr, size_t flash_size)
     guid = qemu_uuid_bswap(guid); /* guids are LE */
     ptr = flash_ptr + flash_size - (bytes_after_table_footer + sizeof(guid));
     if (!qemu_uuid_is_equal((QemuUUID *)ptr, &guid)) {
-        return;
+        return false;
     }
 
     /* if found, just before is two byte table length */
@@ -91,12 +85,16 @@ void pc_system_parse_fw_tables(uint8_t *flash_ptr, size_t flash_size)
 
     if (tot_len < 0 || tot_len > (ptr - flash_ptr)) {
         error_report("OVMF table has invalid size %d", tot_len);
-        return;
+        return false;
     }
 
     if (tot_len == 0) {
         /* no entries in the OVMF table */
-        return;
+        return false;
+    }
+
+    if (fw_table) {
+        g_free(fw_table);
     }
 
     fw_table = g_malloc(tot_len);
@@ -110,8 +108,12 @@ void pc_system_parse_fw_tables(uint8_t *flash_ptr, size_t flash_size)
     memcpy(fw_table, ptr - tot_len, tot_len);
     fw_table += tot_len;
 
+    fw_flash_parsed = true;
+
     /* Copy the SEV metadata table (if exist) */
     pc_system_parse_sev_metadata(flash_ptr, flash_size);
+
+    return true;
 }
 
 /**

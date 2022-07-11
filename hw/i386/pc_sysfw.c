@@ -188,16 +188,16 @@ static void pc_system_flash_map(PCMachineState *pcms,
         sysbus_realize_and_unref(SYS_BUS_DEVICE(system_flash), &error_fatal);
         sysbus_mmio_map(SYS_BUS_DEVICE(system_flash), 0, gpa);
 
+        flash_mem = pflash_cfi01_get_memory(system_flash);
         if (i == 0) {
-            flash_mem = pflash_cfi01_get_memory(system_flash);
             pc_isa_bios_init(rom_memory, flash_mem, size);
+	}
 
-            /* Encrypt the pflash boot ROM */
-            if (sev_enabled()) {
-                flash_ptr = memory_region_get_ram_ptr(flash_mem);
-                flash_size = memory_region_size(flash_mem);
-                x86_firmware_configure(gpa, flash_ptr, flash_size);
-            }
+        /* Encrypt the pflash boot ROM */
+        if (sev_enabled()) {
+            flash_ptr = memory_region_get_ram_ptr(flash_mem);
+            flash_size = memory_region_size(flash_mem);
+            x86_firmware_configure(gpa, flash_ptr, flash_size);
         }
     }
 }
@@ -252,14 +252,15 @@ void pc_system_firmware_init(PCMachineState *pcms,
 void x86_firmware_configure(hwaddr gpa, void *ptr, int size)
 {
     int ret;
+    bool fw_tables;
 
     /*
      * OVMF places a GUIDed structures in the flash, so
      * search for them
      */
-    pc_system_parse_fw_tables(ptr, size);
+    fw_tables = pc_system_parse_fw_tables(ptr, size);
 
-    if (sev_enabled()) {
+    if (fw_tables && sev_enabled()) {
         ret = sev_es_save_reset_vector(ptr, size);
         if (ret) {
             error_report("failed to locate and/or save reset vector");
