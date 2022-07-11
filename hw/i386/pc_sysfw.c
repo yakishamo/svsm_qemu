@@ -261,7 +261,7 @@ void x86_firmware_configure(hwaddr gpa, void *ptr, int size)
     fw_tables = pc_system_parse_fw_tables(ptr, size);
 
     if (fw_tables && sev_enabled()) {
-        ret = sev_es_save_reset_vector(ptr, size);
+        ret = sev_es_save_reset_vector(ptr, size, gpa);
         if (ret) {
             error_report("failed to locate and/or save reset vector");
             exit(1);
