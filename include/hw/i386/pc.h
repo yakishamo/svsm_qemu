@@ -217,7 +217,7 @@ void pc_system_flash_cleanup_unused(PCMachineState *pcms);
 void pc_system_firmware_init(PCMachineState *pcms, MemoryRegion *rom_memory);
 bool pc_system_fw_table_find(const char *entry, uint8_t **data,
                              int *data_len);
-void pc_system_parse_fw_tables(uint8_t *flash_ptr, size_t flash_size);
+bool pc_system_parse_fw_tables(uint8_t *flash_ptr, size_t flash_size);
 
 /* hw/i386/acpi-common.c */
 void pc_madt_cpu_entry(AcpiDeviceIf *adev, int uid,
