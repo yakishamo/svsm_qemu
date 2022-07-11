@@ -181,7 +181,7 @@ typedef struct __attribute__((__packed__)) OvmfSevMetadata {
     OvmfSevMetadataDesc descs[];
 } OvmfSevMetadata;
 
-OvmfSevMetadata *pc_system_get_ovmf_sev_metadata_ptr(void);
+OvmfSevMetadata *pc_system_get_fw_sev_metadata_ptr(void);
 
 void pc_pci_as_mapping_init(Object *owner, MemoryRegion *system_memory,
                             MemoryRegion *pci_address_space);
@@ -215,9 +215,9 @@ void pc_i8259_create(ISABus *isa_bus, qemu_irq *i8259_irqs);
 void pc_system_flash_create(PCMachineState *pcms);
 void pc_system_flash_cleanup_unused(PCMachineState *pcms);
 void pc_system_firmware_init(PCMachineState *pcms, MemoryRegion *rom_memory);
-bool pc_system_ovmf_table_find(const char *entry, uint8_t **data,
-                               int *data_len);
-void pc_system_parse_ovmf_flash(uint8_t *flash_ptr, size_t flash_size);
+bool pc_system_fw_table_find(const char *entry, uint8_t **data,
+                             int *data_len);
+void pc_system_parse_fw_tables(uint8_t *flash_ptr, size_t flash_size);
 
 /* hw/i386/acpi-common.c */
 void pc_madt_cpu_entry(AcpiDeviceIf *adev, int uid,

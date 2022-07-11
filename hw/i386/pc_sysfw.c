@@ -257,7 +257,7 @@ void x86_firmware_configure(hwaddr gpa, void *ptr, int size)
      * OVMF places a GUIDed structures in the flash, so
      * search for them
      */
-    pc_system_parse_ovmf_flash(ptr, size);
+    pc_system_parse_fw_tables(ptr, size);
 
     if (sev_enabled()) {
         ret = sev_es_save_reset_vector(ptr, size);

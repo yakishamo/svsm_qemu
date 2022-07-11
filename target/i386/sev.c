@@ -1601,7 +1601,7 @@ sev_snp_launch_finish(SevSnpGuestState *sev_snp)
      * and Secrets page before finalizing the launch flow. The location of
      * the secrets and CPUID page is available through the OVMF metadata GUID.
      */
-    metadata = pc_system_get_ovmf_sev_metadata_ptr();
+    metadata = pc_system_get_fw_sev_metadata_ptr();
     if (metadata == NULL) {
         error_report("%s: Failed to locate SEV metadata header\n", __func__);
         exit(1);
@@ -1932,7 +1932,7 @@ void qmp_sev_inject_launch_secret(const char *packet_hdr,
         uint8_t *data;
         struct sev_secret_area *area;
 
-        if (!pc_system_ovmf_table_find(SEV_SECRET_GUID, &data, NULL)) {
+        if (!pc_system_fw_table_find(SEV_SECRET_GUID, &data, NULL)) {
             error_setg(errp, "SEV: no secret area found in OVMF,"
                        " gpa must be specified.");
             return;
@@ -1980,7 +1980,7 @@ sev_es_find_reset_vector(void *flash_ptr, uint64_t flash_size,
      *
      * Check the Firmware GUID Table first.
      */
-    if (pc_system_ovmf_table_find(SEV_INFO_BLOCK_GUID, &data, NULL)) {
+    if (pc_system_fw_table_find(SEV_INFO_BLOCK_GUID, &data, NULL)) {
         return sev_es_parse_reset_block((SevInfoBlock *)data, addr);
     }
 
@@ -2123,7 +2123,7 @@ bool sev_add_kernel_loader_hashes(SevKernelLoaderContext *ctx, Error **errp)
     }
 
 cont:
-    if (!pc_system_ovmf_table_find(SEV_HASH_TABLE_RV_GUID, &data, NULL)) {
+    if (!pc_system_fw_table_find(SEV_HASH_TABLE_RV_GUID, &data, NULL)) {
         error_setg(errp, "SEV: kernel specified but guest firmware "
                          "has no hashes table GUID");
         return false;
