@@ -28,16 +28,15 @@
 #include "hw/i386/pc.h"
 #include "cpu.h"
 
-#define OVMF_TABLE_FOOTER_GUID "96b582de-1fb2-45f7-baea-a366c55a082d"
+#define FW_TABLE_FOOTER_GUID "96b582de-1fb2-45f7-baea-a366c55a082d"
 
 static const int bytes_after_table_footer = 32;
+static bool fw_flash_parsed;
+static uint8_t *fw_table;
+static int fw_table_len;
+static OvmfSevMetadata *fw_sev_metadata_table;
 
-static bool ovmf_flash_parsed;
-static uint8_t *ovmf_table;
-static int ovmf_table_len;
-static OvmfSevMetadata *ovmf_sev_metadata_table;
-
-#define OVMF_SEV_META_DATA_GUID "dc886566-984a-4798-A75e-5585a7bf67cc"
+#define FW_SEV_META_DATA_GUID "dc886566-984a-4798-A75e-5585a7bf67cc"
 typedef struct __attribute__((__packed__)) OvmfSevMetadataOffset {
     uint32_t offset;
 } OvmfSevMetadataOffset;
@@ -47,7 +46,7 @@ static void pc_system_parse_sev_metadata(uint8_t *flash_ptr, size_t flash_size)
     OvmfSevMetadata     *metadata;
     OvmfSevMetadataOffset  *data;
 
-    if (!pc_system_ovmf_table_find(OVMF_SEV_META_DATA_GUID, (uint8_t **)&data,
+    if (!pc_system_fw_table_find(FW_SEV_META_DATA_GUID, (uint8_t **)&data,
                                    NULL)) {
         return;
     }
@@ -57,34 +56,29 @@ static void pc_system_parse_sev_metadata(uint8_t *flash_ptr, size_t flash_size)
         return;
     }
 
-    ovmf_sev_metadata_table = g_malloc(metadata->len);
-    memcpy(ovmf_sev_metadata_table, metadata, metadata->len);
+    fw_sev_metadata_table = g_malloc(metadata->len);
+    memcpy(fw_sev_metadata_table, metadata, metadata->len);
 }
 
-void pc_system_parse_ovmf_flash(uint8_t *flash_ptr, size_t flash_size)
+void pc_system_parse_fw_tables(uint8_t *flash_ptr, size_t flash_size)
 {
     uint8_t *ptr;
     QemuUUID guid;
     int tot_len;
 
-    /* should only be called once */
-    if (ovmf_flash_parsed) {
-        return;
-    }
-
-    ovmf_flash_parsed = true;
+    fw_flash_parsed = true;
 
     if (flash_size < TARGET_PAGE_SIZE) {
         return;
     }
 
     /*
-     * if this is OVMF there will be a table footer
+     * if this is a FW with tables there will be a table footer
      * guid 48 bytes before the end of the flash file
      * (= 32 bytes after the table + 16 bytes the GUID itself).
      * If it's not found, silently abort the flash parsing.
      */
-    qemu_uuid_parse(OVMF_TABLE_FOOTER_GUID, &guid);
+    qemu_uuid_parse(FW_TABLE_FOOTER_GUID, &guid);
     guid = qemu_uuid_bswap(guid); /* guids are LE */
     ptr = flash_ptr + flash_size - (bytes_after_table_footer + sizeof(guid));
     if (!qemu_uuid_is_equal((QemuUUID *)ptr, &guid)) {
@@ -105,23 +99,23 @@ void pc_system_parse_ovmf_flash(uint8_t *flash_ptr, size_t flash_size)
         return;
     }
 
-    ovmf_table = g_malloc(tot_len);
-    ovmf_table_len = tot_len;
+    fw_table = g_malloc(tot_len);
+    fw_table_len = tot_len;
 
     /*
      * ptr is the foot of the table, so copy it all to the newly
-     * allocated ovmf_table and then set the ovmf_table pointer
+     * allocated fw_table and then set the fw_table pointer
      * to the table foot
      */
-    memcpy(ovmf_table, ptr - tot_len, tot_len);
-    ovmf_table += tot_len;
+    memcpy(fw_table, ptr - tot_len, tot_len);
+    fw_table += tot_len;
 
     /* Copy the SEV metadata table (if exist) */
     pc_system_parse_sev_metadata(flash_ptr, flash_size);
 }
 
 /**
- * pc_system_ovmf_table_find - Find the data associated with an entry in OVMF's
+ * pc_system_fw_table_find - Find the data associated with an entry in FW's
  * reset vector GUIDed table.
  *
  * @entry: GUID string of the entry to lookup
@@ -129,16 +123,16 @@ void pc_system_parse_ovmf_flash(uint8_t *flash_ptr, size_t flash_size)
  * @data_len: Filled with the length of the entry's value (if not NULL). Pass
  *            NULL here if the length of data is known.
  *
- * Return: true if the entry was found in the OVMF table; false otherwise.
+ * Return: true if the entry was found in the FW table; false otherwise.
  */
-bool pc_system_ovmf_table_find(const char *entry, uint8_t **data,
+bool pc_system_fw_table_find(const char *entry, uint8_t **data,
                                int *data_len)
 {
-    uint8_t *ptr = ovmf_table;
-    int tot_len = ovmf_table_len;
+    uint8_t *ptr = fw_table;
+    int tot_len = fw_table_len;
     QemuUUID entry_guid;
 
-    assert(ovmf_flash_parsed);
+    assert(fw_flash_parsed);
 
     if (qemu_uuid_parse(entry, &entry_guid) < 0) {
         return false;
@@ -188,7 +182,7 @@ bool pc_system_ovmf_table_find(const char *entry, uint8_t **data,
     return false;
 }
 
-OvmfSevMetadata *pc_system_get_ovmf_sev_metadata_ptr(void)
+OvmfSevMetadata *pc_system_get_fw_sev_metadata_ptr(void)
 {
-    return ovmf_sev_metadata_table;
+    return fw_sev_metadata_table;
 }

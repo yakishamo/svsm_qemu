@@ -1,9 +1,9 @@
-config X86_FW_OVMF
+config X86_FW_TABLES
     bool
 
 config SEV
     bool
-    select X86_FW_OVMF
+    select X86_FW_TABLES
     depends on KVM
 
 config SGX
