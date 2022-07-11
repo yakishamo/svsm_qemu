@@ -77,6 +77,7 @@ struct SevCommonState {
     uint32_t reset_cs;
     uint32_t reset_ip;
     bool reset_data_valid;
+    bool reset_data_is_svsm;
 };
 
 struct SevGuestState {
@@ -123,6 +124,12 @@ typedef struct QEMU_PACKED SevHashTableDescriptor {
     /* SEV hash table area size (in bytes) */
     uint32_t size;
 } SevHashTableDescriptor;
+
+#define SVSM_INFO_GUID "a789a612-0597-4c4b-a49f-cbb1fe9d1ddd"
+typedef struct QEMU_PACKED SevSvsmInfoBlock {
+    /* SVSM reset IP, relative to flash base addr */
+    uint32_t launch_offset;
+} SevSvsmInfoBlock;
 
 /* hard code sha256 digest size */
 #define HASH_SIZE 32
@@ -2005,6 +2012,55 @@ sev_es_find_reset_vector(void *flash_ptr, uint64_t flash_size,
     return sev_es_parse_reset_block(info, addr);
 }
 
+static int sev_svsm_find_reset_vector(void *flash_ptr, uint64_t flash_size,
+                                      hwaddr gpa, uint32_t *addr)
+{
+    SevSvsmInfoBlock *info;
+    uint8_t *data;
+
+    if (pc_system_fw_table_find(SVSM_INFO_GUID, &data, NULL)) {
+        info = (SevSvsmInfoBlock *)data;
+        if (info->launch_offset >= flash_size) {
+            error_report("SVSM launch offset outside of pflash rom");
+            return 1;
+        }
+
+        *addr = gpa + info->launch_offset;
+
+        return 0;
+    }
+
+    return 1;
+}
+
+static void sev_svsm_set_reset_vector(CPUState *cpu)
+{
+    X86CPU *x86;
+    CPUX86State *env;
+    SevCommonState *sev_common = SEV_COMMON(MACHINE(qdev_get_machine())->cgs);
+
+    /* Only update if we have valid reset information */
+    if (!sev_common || !sev_common->reset_data_valid) {
+        return;
+    }
+
+    x86 = X86_CPU(cpu);
+    env = &x86->env;
+
+    /* Launch Service Module in 32 bit protected mode */
+    cpu_x86_update_cr0(env, 0x60000011);
+
+    cpu_x86_load_seg_cache(env, R_CS, 0, 0, 0xfffff,
+	    DESC_P_MASK | DESC_S_MASK | DESC_CS_MASK |
+	    DESC_R_MASK | DESC_A_MASK | DESC_B_MASK  |
+	    DESC_G_MASK);
+    cpu_x86_load_seg_cache(env, R_DS, 0, 0, 0xfffff,
+	    DESC_P_MASK | DESC_S_MASK | DESC_W_MASK |
+	    DESC_A_MASK | DESC_B_MASK | DESC_G_MASK);
+
+    env->eip = sev_common->reset_ip;
+}
+
 void sev_es_set_reset_vector(CPUState *cpu)
 {
     X86CPU *x86;
@@ -2016,22 +2072,26 @@ void sev_es_set_reset_vector(CPUState *cpu)
         return;
     }
 
-    /* Do not update the BSP reset state */
-    if (cpu->cpu_index == 0) {
-        return;
+    if (sev_common->reset_data_is_svsm) {
+        sev_svsm_set_reset_vector(cpu);
+    } else {
+        /* Do not update the BSP reset state */
+        if (cpu->cpu_index == 0) {
+            return;
+        }
+
+        x86 = X86_CPU(cpu);
+        env = &x86->env;
+
+        cpu_x86_load_seg_cache(env, R_CS, 0xf000, sev_common->reset_cs, 0xffff,
+                DESC_P_MASK | DESC_S_MASK | DESC_CS_MASK |
+                DESC_R_MASK | DESC_A_MASK);
+
+        env->eip = sev_common->reset_ip;
     }
-
-    x86 = X86_CPU(cpu);
-    env = &x86->env;
-
-    cpu_x86_load_seg_cache(env, R_CS, 0xf000, sev_common->reset_cs, 0xffff,
-                           DESC_P_MASK | DESC_S_MASK | DESC_CS_MASK |
-                           DESC_R_MASK | DESC_A_MASK);
-
-    env->eip = sev_common->reset_ip;
 }
 
-int sev_es_save_reset_vector(void *flash_ptr, uint64_t flash_size)
+int sev_es_save_reset_vector(void *flash_ptr, uint64_t flash_size, hwaddr gpa)
 {
     CPUState *cpu;
     uint32_t addr;
@@ -2043,23 +2103,29 @@ int sev_es_save_reset_vector(void *flash_ptr, uint64_t flash_size)
     }
 
     addr = 0;
-    ret = sev_es_find_reset_vector(flash_ptr, flash_size,
-                                   &addr);
-    if (ret) {
-        return ret;
-    }
 
-    if (addr) {
-        sev_common->reset_cs = addr & 0xffff0000;
-        sev_common->reset_ip = addr & 0x0000ffff;
+    if ((ret = sev_svsm_find_reset_vector(flash_ptr, flash_size, gpa, &addr)) == 0) {
+        sev_common->reset_ip = addr;
         sev_common->reset_data_valid = true;
+        sev_common->reset_data_is_svsm = true;
 
         CPU_FOREACH(cpu) {
-            sev_es_set_reset_vector(cpu);
+            sev_svsm_set_reset_vector(cpu);
+        }
+    } else if ((ret = sev_es_find_reset_vector(flash_ptr, flash_size,
+                                               &addr)) == 0) {
+        if (addr) {
+            sev_common->reset_cs = addr & 0xffff0000;
+            sev_common->reset_ip = addr & 0x0000ffff;
+            sev_common->reset_data_valid = true;
+
+            CPU_FOREACH(cpu) {
+                sev_es_set_reset_vector(cpu);
+            }
         }
     }
 
-    return 0;
+    return ret;
 }
 
 static const QemuUUID sev_hash_table_header_guid = {
