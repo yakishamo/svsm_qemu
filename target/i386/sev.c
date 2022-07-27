@@ -1520,7 +1520,7 @@ snp_launch_update_cpuid(SevSnpGuestState *sev_snp, uint32_t cpuid_addr,
 
     if (ret) {
         error_report("SEV-SNP: unable to query CPUID values for CPU: '%s'",
-                     strerror(-ret));
+                strerror(-ret));
         return 1;
     }
 
@@ -1531,7 +1531,6 @@ snp_launch_update_cpuid(SevSnpGuestState *sev_snp, uint32_t cpuid_addr,
     }
 
     memcpy(hva, &snp_cpuid_info, sizeof(snp_cpuid_info));
-
     ret = sev_snp_launch_update(sev_snp, cpuid_addr, hva, cpuid_len,
                                     KVM_SEV_SNP_PAGE_TYPE_CPUID);
     if (ret) {
@@ -2050,13 +2049,27 @@ static void sev_svsm_set_reset_vector(CPUState *cpu)
     /* Launch Service Module in 32 bit protected mode */
     cpu_x86_update_cr0(env, 0x60000011);
 
-    cpu_x86_load_seg_cache(env, R_CS, 0, 0, 0xfffff,
+    cpu_x86_load_seg_cache(env, R_CS, 8, 0, 0xffffffff,
 	    DESC_P_MASK | DESC_S_MASK | DESC_CS_MASK |
-	    DESC_R_MASK | DESC_A_MASK | DESC_B_MASK  |
-	    DESC_G_MASK);
-    cpu_x86_load_seg_cache(env, R_DS, 0, 0, 0xfffff,
+	    DESC_R_MASK | DESC_B_MASK | DESC_G_MASK  |
+	    DESC_A_MASK);
+
+    cpu_x86_load_seg_cache(env, R_DS, 16, 0, 0xffffffff,
 	    DESC_P_MASK | DESC_S_MASK | DESC_W_MASK |
-	    DESC_A_MASK | DESC_B_MASK | DESC_G_MASK);
+	    DESC_B_MASK | DESC_G_MASK | DESC_A_MASK);
+
+    cpu_x86_load_seg_cache(env, R_ES, 16, 0, 0xffffffff,
+	    DESC_P_MASK | DESC_S_MASK | DESC_W_MASK |
+	    DESC_B_MASK | DESC_G_MASK | DESC_A_MASK);
+
+    cpu_x86_load_seg_cache(env, R_FS, 16, 0, 0xffffffff,
+	    DESC_P_MASK | DESC_S_MASK | DESC_W_MASK |
+	    DESC_B_MASK | DESC_G_MASK | DESC_A_MASK);
+
+    cpu_x86_load_seg_cache(env, R_SS, 16, 0, 0xffffffff,
+	    DESC_P_MASK | DESC_S_MASK | DESC_W_MASK |
+	    DESC_B_MASK | DESC_G_MASK | DESC_A_MASK);
+
 
     env->eip = sev_common->reset_ip;
 }

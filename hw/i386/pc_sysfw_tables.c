@@ -32,7 +32,7 @@
 
 static const int bytes_after_table_footer = 32;
 static bool fw_flash_parsed;
-static uint8_t *fw_table;
+static uint8_t *fw_table, *fw_table_ptr;
 static int fw_table_len;
 static OvmfSevMetadata *fw_sev_metadata_table;
 
@@ -93,11 +93,11 @@ bool pc_system_parse_fw_tables(uint8_t *flash_ptr, size_t flash_size)
         return false;
     }
 
-    if (fw_table) {
-        g_free(fw_table);
+    if (fw_table_ptr) {
+        g_free(fw_table_ptr);
     }
 
-    fw_table = g_malloc(tot_len);
+    fw_table_ptr = fw_table = g_malloc(tot_len);
     fw_table_len = tot_len;
 
     /*

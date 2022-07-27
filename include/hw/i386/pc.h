@@ -35,7 +35,7 @@ typedef struct PCMachineState {
     /* Pointers to devices and objects: */
     PCIBus *bus;
     I2CBus *smbus;
-    PFlashCFI01 *flash[2];
+    PFlashCFI01 *flash[3];
     ISADevice *pcspk;
     DeviceState *iommu;
 
