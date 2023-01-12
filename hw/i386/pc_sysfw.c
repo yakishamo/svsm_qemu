@@ -32,6 +32,7 @@
 #include "hw/sysbus.h"
 #include "hw/i386/x86.h"
 #include "hw/i386/pc.h"
+#include "hw/i386/fw_cfg.h"
 #include "hw/loader.h"
 #include "hw/qdev-properties.h"
 #include "hw/block/flash.h"
@@ -139,7 +140,8 @@ void pc_system_flash_cleanup_unused(PCMachineState *pcms)
  * not supported.
  */
 static void pc_system_flash_map(PCMachineState *pcms,
-                                MemoryRegion *rom_memory)
+                                MemoryRegion *rom_memory,
+				PCFlashGuestMapping *flash_mappings)
 {
     hwaddr total_size = 0;
     int i;
@@ -155,6 +157,7 @@ static void pc_system_flash_map(PCMachineState *pcms,
     for (i = 0; i < ARRAY_SIZE(pcms->flash); i++) {
         hwaddr gpa;
 
+	flash_mappings->entries[i].enabled = false;
         system_flash = pcms->flash[i];
         blk = pflash_cfi01_get_blk(system_flash);
         if (!blk) {
@@ -199,13 +202,40 @@ static void pc_system_flash_map(PCMachineState *pcms,
         if (sev_enabled()) {
             flash_ptr = memory_region_get_ram_ptr(flash_mem);
             flash_size = memory_region_size(flash_mem);
-            x86_firmware_configure(gpa, flash_ptr, flash_size);
+            if (x86_firmware_configure(gpa, flash_ptr, flash_size)) {
+		flash_mappings->entries[i].enabled = true;
+		flash_mappings->entries[i].base = gpa;
+		flash_mappings->entries[i].size = flash_size;
+            }
         }
     }
 }
 
+void pc_system_firmware_fw_cfg(FWCfgState *fw_cfg, PCFlashGuestMapping *flash_mappings)
+{
+    struct {
+        uint64_t base;
+        uint64_t size;
+    } content[3];
+    int i, count = 0;
+
+    for (i = 0; i < ARRAY_SIZE(flash_mappings->entries); i++) {
+        if (!flash_mappings->entries[i].enabled) {
+            continue;
+        }
+
+        content[count].base = cpu_to_le64(flash_mappings->entries[i].base);
+        content[count].size = cpu_to_le64(flash_mappings->entries[i].size);
+	printf("Flash mapping at 0x%lx size: 0x%lx\n", content[count].base, content[count].size);
+        count += 1;
+    }
+
+    fw_cfg_add_file(fw_cfg, "etc/flash", g_memdup(content, sizeof(content[0]) * count), sizeof(content[0]) * count);
+}
+
 void pc_system_firmware_init(PCMachineState *pcms,
-                             MemoryRegion *rom_memory)
+                             MemoryRegion *rom_memory,
+			     PCFlashGuestMapping *flash_mappings)
 {
     PCMachineClass *pcmc = PC_MACHINE_GET_CLASS(pcms);
     int i;
@@ -245,13 +275,13 @@ void pc_system_firmware_init(PCMachineState *pcms,
             exit(1);
         }
 
-        pc_system_flash_map(pcms, rom_memory);
+        pc_system_flash_map(pcms, rom_memory, flash_mappings);
     }
 
     pc_system_flash_cleanup_unused(pcms);
 }
 
-void x86_firmware_configure(hwaddr gpa, void *ptr, int size)
+bool x86_firmware_configure(hwaddr gpa, void *ptr, int size)
 {
     int ret;
     bool fw_tables;
@@ -270,5 +300,8 @@ void x86_firmware_configure(hwaddr gpa, void *ptr, int size)
         }
 
         sev_encrypt_flash(gpa, ptr, size, &error_fatal);
+        return true;
     }
+
+    return false;
 }

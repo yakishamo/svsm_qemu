@@ -60,6 +60,14 @@ typedef struct PCMachineState {
     CXLState cxl_devices_state;
 } PCMachineState;
 
+typedef struct PCFlashGuestMapping {
+    struct {
+        bool enabled;
+        uint64_t base;
+        uint64_t size;
+    } entries[3];
+} PCFlashGuestMapping;
+
 #define PC_MACHINE_ACPI_DEVICE_PROP "acpi-device"
 #define PC_MACHINE_MAX_RAM_BELOW_4G "max-ram-below-4g"
 #define PC_MACHINE_DEVMEM_REGION_SIZE "device-memory-region-size"
@@ -214,10 +222,12 @@ void pc_i8259_create(ISABus *isa_bus, qemu_irq *i8259_irqs);
 /* pc_sysfw.c */
 void pc_system_flash_create(PCMachineState *pcms);
 void pc_system_flash_cleanup_unused(PCMachineState *pcms);
-void pc_system_firmware_init(PCMachineState *pcms, MemoryRegion *rom_memory);
+void pc_system_firmware_init(PCMachineState *pcms, MemoryRegion *rom_memory,
+                             PCFlashGuestMapping *flash_mappings );
 bool pc_system_fw_table_find(const char *entry, uint8_t **data,
                              int *data_len);
 bool pc_system_parse_fw_tables(uint8_t *flash_ptr, size_t flash_size);
+void pc_system_firmware_fw_cfg(FWCfgState *fw_cfg, PCFlashGuestMapping *flash_mappings);
 
 /* hw/i386/acpi-common.c */
 void pc_madt_cpu_entry(AcpiDeviceIf *adev, int uid,

@@ -38,6 +38,7 @@ const char *fw_cfg_arch_key_name(uint16_t key)
         {FW_CFG_IRQ0_OVERRIDE, "irq0_override"},
         {FW_CFG_E820_TABLE, "e820_table"},
         {FW_CFG_HPET, "hpet"},
+	{FW_CFG_FLASH, "flash"},
     };
 
     for (size_t i = 0; i < ARRAY_SIZE(fw_cfg_arch_wellknown_keys); i++) {
