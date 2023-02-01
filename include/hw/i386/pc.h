@@ -168,6 +168,8 @@ typedef enum {
     SEV_DESC_TYPE_SNP_SECRETS,
     /* The section contains address that can be used as a CPUID page */
     SEV_DESC_TYPE_CPUID,
+    /* Inital SVSM Call Area Address */
+    SEV_DESC_TYPE_CAA,
     /* The section contains the region for kernel hashes for measured direct boot */
     SEV_DESC_TYPE_SNP_KERNEL_HASHES = 0x10,
 
