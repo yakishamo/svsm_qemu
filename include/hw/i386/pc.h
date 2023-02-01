@@ -172,6 +172,8 @@ typedef enum {
     SEV_DESC_TYPE_SNP_SECRETS,
     /* The section contains address that can be used as a CPUID page */
     SEV_DESC_TYPE_CPUID,
+    /* Inital SVSM Call Area Address */
+    SEV_DESC_TYPE_CAA,
 
 } ovmf_sev_metadata_desc_type;
 

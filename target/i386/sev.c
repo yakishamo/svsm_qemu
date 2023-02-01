@@ -1550,6 +1550,7 @@ snp_metadata_desc_to_page_type(int desc_type)
     case SEV_DESC_TYPE_SNP_SEC_MEM: return KVM_SEV_SNP_PAGE_TYPE_ZERO;
     case SEV_DESC_TYPE_SNP_SECRETS: return KVM_SEV_SNP_PAGE_TYPE_SECRETS;
     case SEV_DESC_TYPE_CPUID: return KVM_SEV_SNP_PAGE_TYPE_CPUID;
+    case SEV_DESC_TYPE_CAA: return KVM_SEV_SNP_PAGE_TYPE_ZERO; 
     default: return -1;
     }
 }
