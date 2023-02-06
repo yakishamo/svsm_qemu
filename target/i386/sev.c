@@ -105,6 +105,11 @@ struct SevSnpGuestState {
     struct kvm_sev_snp_launch_start kvm_start_conf;
     struct kvm_sev_snp_launch_finish kvm_finish_conf;
     bool kernel_hashes;
+
+    /* SVSM location in guest physical address space */
+    bool svsm_enabled;
+    uint64_t svsm_base;
+    uint64_t svsm_size;
 };
 
 #define DEFAULT_GUEST_POLICY    0x1 /* disable debug */
@@ -748,6 +753,58 @@ sev_snp_guest_set_host_data(Object *obj, const char *value, Error **errp)
     memcpy(finish->host_data, blob, len);
 }
 
+static bool
+sev_snp_guest_get_svsm_en(Object *obj, Error **errp)
+{
+    SevSnpGuestState *sev_snp_guest = SEV_SNP_GUEST(obj);
+
+    return !!sev_snp_guest->svsm_enabled;
+}
+
+static void
+sev_snp_guest_set_svsm_en(Object *obj, bool value, Error **errp)
+{
+    SevSnpGuestState *sev_snp_guest = SEV_SNP_GUEST(obj);
+
+    sev_snp_guest->svsm_enabled = value;
+}
+
+static void
+sev_snp_guest_get_svsm_base(Object *obj, Visitor *v, const char *name,
+                            void *opaque, Error **errp)
+{
+    visit_type_uint64(v, name,
+                      (uint64_t *)&SEV_SNP_GUEST(obj)->svsm_base,
+                      errp);
+}
+
+static void
+sev_snp_guest_set_svsm_base(Object *obj, Visitor *v, const char *name,
+                            void *opaque, Error **errp)
+{
+    visit_type_uint64(v, name,
+                      (uint64_t *)&SEV_SNP_GUEST(obj)->svsm_base,
+                      errp);
+}
+
+static void
+sev_snp_guest_get_svsm_size(Object *obj, Visitor *v, const char *name,
+                            void *opaque, Error **errp)
+{
+    visit_type_uint64(v, name,
+                      (uint64_t *)&SEV_SNP_GUEST(obj)->svsm_size,
+                      errp);
+}
+
+static void
+sev_snp_guest_set_svsm_size(Object *obj, Visitor *v, const char *name,
+                            void *opaque, Error **errp)
+{
+    visit_type_uint64(v, name,
+                      (uint64_t *)&SEV_SNP_GUEST(obj)->svsm_size,
+                      errp);
+}
+
 static void
 sev_snp_guest_class_init(ObjectClass *oc, void *data)
 {
@@ -777,7 +834,19 @@ sev_snp_guest_class_init(ObjectClass *oc, void *data)
     object_class_property_add_str(oc, "host-data",
                                   sev_snp_guest_get_host_data,
                                   sev_snp_guest_set_host_data);
+    object_class_property_add_bool(oc, "svsm",
+                                   sev_snp_guest_get_svsm_en,
+                                   sev_snp_guest_set_svsm_en);
+    object_class_property_add(oc, "svsm-base", "uint64",
+                              sev_snp_guest_get_svsm_base,
+                              sev_snp_guest_set_svsm_base, NULL, NULL);
+    object_class_property_add(oc, "svsm-size", "uint64",
+                              sev_snp_guest_get_svsm_size,
+                              sev_snp_guest_set_svsm_size, NULL, NULL);
 }
+
+#define SEV_SNP_SVSM_DEFAULT_BASE	(512 * (1ULL << 30))	/* 512G */
+#define SEV_SNP_SVSM_DEFAULT_SIZE	(256 * (1ULL << 20))	/* 256 MB */
 
 static void
 sev_snp_guest_instance_init(Object *obj)
@@ -786,6 +855,10 @@ sev_snp_guest_instance_init(Object *obj)
 
     /* default init/start/finish params for kvm */
     sev_snp_guest->kvm_start_conf.policy = DEFAULT_SEV_SNP_POLICY;
+
+    sev_snp_guest->svsm_enabled = false;
+    sev_snp_guest->svsm_base = SEV_SNP_SVSM_DEFAULT_BASE;
+    sev_snp_guest->svsm_size = SEV_SNP_SVSM_DEFAULT_SIZE;
 }
 
 /* guest info specific to sev-snp */
@@ -1826,6 +1899,47 @@ int sev_kvm_init(ConfidentialGuestSupport *cgs, Error **errp)
 err:
     ram_block_discard_disable(false);
     return -1;
+}
+
+void sev_mem_init(PCMachineState *pcms)
+{
+    MachineState *machine = MACHINE(pcms);
+    X86MachineState *x86ms = X86_MACHINE(pcms);
+    SevSnpGuestState *sev_snp_guest;
+    SevCommonState *sev_common;
+    uint64_t base, size;
+    MemoryRegion *svsm;
+
+    if (machine->cgs == NULL || !sev_snp_enabled()) {
+        return;
+    }
+
+    sev_common = SEV_COMMON(machine->cgs);
+    sev_snp_guest = SEV_SNP_GUEST(sev_common);
+
+    /* Check whether SVSM was enabled */
+    if (!sev_snp_guest->svsm_enabled) {
+        return;
+    }
+
+    base = sev_snp_guest->svsm_base;
+    size = sev_snp_guest->svsm_size;
+
+    if (size <= x86ms->above_4g_mem_size) {
+        x86ms->above_4g_mem_size -= size;
+        machine->ram_size -= size;
+    } else if (size < x86ms->below_4g_mem_size) {
+        x86ms->below_4g_mem_size -= size;
+        machine->ram_size -= size;
+    } else {
+        return;
+    }
+
+    svsm = g_malloc(sizeof(*svsm));
+    memory_region_init_alias(svsm, NULL, "svsm.ram", machine->ram, machine->ram_size, size);
+    memory_region_add_subregion(get_system_memory(), base, svsm);
+
+    printf("Adding SVSM memory 0x%lx-0x%lx\n", base, base + size);
 }
 
 int

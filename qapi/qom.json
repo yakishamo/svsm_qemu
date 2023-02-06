@@ -927,7 +927,10 @@
             '*id-auth': 'str',
             '*auth-key-enabled': 'bool',
             '*kernel-hashes': 'bool',
-            '*host-data': 'str' } }
+            '*host-data': 'str',
+            '*svsm': 'bool',
+            '*svsmbase': 'uint64',
+            '*svsmsize': 'uint64' } }
 
 ##
 # @ThreadContextProperties:
