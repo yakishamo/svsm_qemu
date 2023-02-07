@@ -37,6 +37,7 @@
 #include "qapi/qmp/qerror.h"
 #include "exec/confidential-guest-support.h"
 #include "hw/i386/pc.h"
+#include "hw/nvram/fw_cfg.h"
 #include "exec/address-spaces.h"
 #include "exec/ramblock.h"
 
@@ -1901,6 +1902,23 @@ err:
     return -1;
 }
 
+void sev_init_fw_cfg(PCMachineState *pcms)
+{
+    MachineState *machine = MACHINE(pcms);
+    X86MachineState *x86ms = X86_MACHINE(pcms);
+    SevCommonState *sev_common = SEV_COMMON(machine->cgs);
+    SevSnpGuestState *sev_snp_guest = SEV_SNP_GUEST(sev_common);
+    struct content {
+        uint64_t base;
+        uint64_t size;
+    } data;
+
+    data.base = cpu_to_le64(sev_snp_guest->svsm_base);
+    data.size = cpu_to_le64(sev_snp_guest->svsm_size);
+
+    fw_cfg_add_file(x86ms->fw_cfg, "etc/sev/svsm", g_memdup(&data, sizeof(data)), sizeof(data));
+}
+
 void sev_mem_init(PCMachineState *pcms)
 {
     MachineState *machine = MACHINE(pcms);
@@ -1938,8 +1956,6 @@ void sev_mem_init(PCMachineState *pcms)
     svsm = g_malloc(sizeof(*svsm));
     memory_region_init_alias(svsm, NULL, "svsm.ram", machine->ram, machine->ram_size, size);
     memory_region_add_subregion(get_system_memory(), base, svsm);
-
-    printf("Adding SVSM memory 0x%lx-0x%lx\n", base, base + size);
 }
 
 int
