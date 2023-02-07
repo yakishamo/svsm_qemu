@@ -191,6 +191,7 @@ typedef struct __attribute__((__packed__)) OvmfSevMetadata {
 
 OvmfSevMetadata *pc_system_get_fw_sev_metadata_ptr(void);
 void sev_mem_init(PCMachineState *pcms);
+void sev_init_fw_cfg(PCMachineState *pcms);
 
 void pc_pci_as_mapping_init(MemoryRegion *system_memory,
                             MemoryRegion *pci_address_space);

@@ -1154,6 +1154,8 @@ void pc_memory_init(PCMachineState *pcms,
 
     /* Init ACPI memory hotplug IO base address */
     pcms->memhp_io_base = ACPI_MEMORY_HOTPLUG_BASE;
+
+    sev_init_fw_cfg(pcms);
 }
 
 /*
