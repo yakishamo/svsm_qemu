@@ -63,6 +63,8 @@ typedef struct TdxGuest {
 
     /* GetQuote */
     TdxQuoteGenerator *quote_generator;
+
+    uint8_t num_l2_vms;
 } TdxGuest;
 
 #ifdef CONFIG_TDX

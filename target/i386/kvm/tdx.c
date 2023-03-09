@@ -741,6 +741,13 @@ static int tdx_kvm_init(ConfidentialGuestSupport *cgs, Error **errp)
         }
     }
 
+    /* Sanity check. The num_l2_vms should not exceed the max_num_l2_vms */
+    if (tdx->num_l2_vms > tdx_caps->max_num_l2_vms) {
+        error_setg(errp, "TDX VM doesn't support %d L2 VMs, maximum %d",
+                   tdx->num_l2_vms, tdx_caps->max_num_l2_vms);
+        return -EINVAL;
+    }
+
     update_tdx_cpuid_lookup_by_tdx_caps();
 
     /*
@@ -875,6 +882,7 @@ int tdx_pre_create_vcpu(CPUState *cpu, Error **errp)
     init_vm->cpuid.nent = kvm_x86_arch_cpuid(env, init_vm->cpuid.entries, 0);
 
     init_vm->attributes = tdx_guest->attributes;
+    init_vm->num_l2_vms = tdx_guest->num_l2_vms;
 
     do {
         r = tdx_vm_ioctl(KVM_TDX_INIT_VM, 0, init_vm);
@@ -1362,6 +1370,9 @@ static void tdx_guest_init(Object *obj)
 
     tdx->event_notify_vector = -1;
     tdx->event_notify_apicid = -1;
+
+    object_property_add_uint8_ptr(obj, "num-l2-vms", &tdx->num_l2_vms,
+                                  OBJ_PROP_FLAG_READWRITE);
 }
 
 static void tdx_guest_finalize(Object *obj)
