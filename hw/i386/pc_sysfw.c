@@ -211,7 +211,7 @@ void pc_system_firmware_init(PCMachineState *pcms,
     BlockBackend *pflash_blk[ARRAY_SIZE(pcms->flash)];
 
     if (!pcmc->pci_enabled) {
-        x86_bios_rom_init(MACHINE(pcms), "bios.bin", rom_memory, true);
+        x86_bios_rom_init(MACHINE(pcms), "bios.bin", pcms->firmware2, rom_memory, true);
         return;
     }
 
@@ -236,7 +236,7 @@ void pc_system_firmware_init(PCMachineState *pcms,
          * in which case the firmware must be provided by the IGVM file.
          */
         if (!cgs_is_igvm(MACHINE(pcms)->cgs)) {
-            x86_bios_rom_init(MACHINE(pcms), "bios.bin", rom_memory, false);
+            x86_bios_rom_init(MACHINE(pcms), "bios.bin", pcms->firmware2, rom_memory, false);
         }
     } else {
         if (kvm_enabled() && !kvm_readonly_mem_enabled()) {

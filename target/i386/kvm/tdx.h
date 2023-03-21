@@ -65,6 +65,7 @@ typedef struct TdxGuest {
     TdxQuoteGenerator *quote_generator;
 
     uint8_t num_l2_vms;
+    MemoryRegion *bios2_region;
 } TdxGuest;
 
 #ifdef CONFIG_TDX
@@ -77,6 +78,7 @@ void tdx_get_supported_cpuid(uint32_t function, uint32_t index, int reg,
                              uint32_t *ret);
 int tdx_pre_create_vcpu(CPUState *cpu, Error **errp);
 void tdx_set_tdvf_region(MemoryRegion *tdvf_mr);
+void tdx_set_bios2_region(MemoryRegion *bios2_region);
 int tdx_parse_tdvf(void *flash_ptr, int size);
 int tdx_handle_exit(X86CPU *cpu, struct kvm_tdx_exit *tdx_exit);
 

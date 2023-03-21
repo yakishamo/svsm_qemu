@@ -480,6 +480,12 @@ void tdx_set_tdvf_region(MemoryRegion *tdvf_mr)
     tdx_guest->tdvf_mr = tdvf_mr;
 }
 
+void tdx_set_bios2_region(MemoryRegion *bios2_region)
+{
+    assert(!tdx_guest->bios2_region);
+    tdx_guest->bios2_region = bios2_region;
+}
+
 static TdxFirmwareEntry *tdx_get_hob_entry(TdxGuest *tdx)
 {
     TdxFirmwareEntry *entry;
@@ -696,6 +702,26 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
      */
     ram_block = tdx_guest->tdvf_mr->ram_block;
     ram_block_discard_range(ram_block, 0, ram_block->max_length);
+
+    if (tdx_guest->bios2_region) {
+        struct kvm_memory_mapping mem_region = {
+            .source = (__u64)memory_region_get_ram_ptr(tdx_guest->bios2_region),
+            .base_gfn = (__u64)(((uint32_t)-tdx_guest->bios2_region->size) >> 12),
+            .nr_pages = tdx_guest->bios2_region->size >> 12,
+        };
+
+        do {
+            r = kvm_vcpu_ioctl(first_cpu, KVM_MEMORY_MAPPING, &mem_region);
+        } while (r == -EAGAIN);
+
+        if (r < 0) {
+             error_report("KVM_MEMORY_MAPPING failed %s", strerror(-r));
+             exit(1);
+        }
+
+        ram_block = tdx_guest->bios2_region->ram_block;
+        ram_block_discard_range(ram_block, 0, ram_block->max_length);
+    }
 
     r = tdx_vm_ioctl(KVM_TDX_FINALIZE_VM, 0, NULL);
     if (r < 0) {

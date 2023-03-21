@@ -44,6 +44,7 @@ typedef struct PCMachineState {
     OnOffAuto vmport;
     SmbiosEntryPointType smbios_entry_point_type;
     const char *south_bridge;
+    char *firmware2;
 
     bool acpi_build_enabled;
     bool smbus_enabled;
