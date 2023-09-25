@@ -903,10 +903,12 @@ void pc_memory_init(PCMachineState *pcms,
     hwaddr cxl_base, cxl_resv_end = 0;
     X86CPU *cpu = X86_CPU(first_cpu);
 
+    linux_boot = (machine->kernel_filename != NULL);
+
+    tdx_mem_init(machine);
+
     assert(machine->ram_size == x86ms->below_4g_mem_size +
                                 x86ms->above_4g_mem_size);
-
-    linux_boot = (machine->kernel_filename != NULL);
 
     /*
      * The HyperTransport range close to the 1T boundary is unique to AMD

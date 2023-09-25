@@ -64,6 +64,11 @@ typedef struct TdxGuest {
     /* GetQuote */
     TdxQuoteGenerator *quote_generator;
 
+    /* SVSM location in guest physical address space */
+    bool svsm_enabled;
+    uint64_t svsm_base;
+    uint64_t svsm_size;
+
     uint8_t num_l2_vms;
     MemoryRegion *bios2_region;
 } TdxGuest;
@@ -74,6 +79,7 @@ bool is_tdx_vm(void);
 #define is_tdx_vm() 0
 #endif /* CONFIG_TDX */
 
+void tdx_mem_init(MachineState *ms);
 void tdx_get_supported_cpuid(uint32_t function, uint32_t index, int reg,
                              uint32_t *ret);
 int tdx_pre_create_vcpu(CPUState *cpu, Error **errp);

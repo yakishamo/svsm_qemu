@@ -624,12 +624,59 @@ static void tdx_post_init_vcpus(void)
     }
 }
 
+void tdx_mem_init(MachineState *ms)
+{
+    X86MachineState *x86ms = X86_MACHINE(ms);
+    TdxGuest *tdx;
+    MemoryRegion *svsm;
+    uint64_t svsm_base, svsm_size;
+
+    if (!is_tdx_vm()) {
+        return;
+    }
+
+    tdx = TDX_GUEST(ms->cgs);
+
+    /* Check whether SVSM was enabled */
+    if (!tdx->svsm_enabled) {
+        return;
+    }
+
+    /* First reserve some RAM for the SVSM */
+    svsm_base = tdx->svsm_base;
+    svsm_size = tdx->svsm_size;
+
+    if (svsm_size <= x86ms->above_4g_mem_size) {
+        x86ms->above_4g_mem_size -= svsm_size;
+        ms->ram_size -= svsm_size;
+    } else if (svsm_size < x86ms->below_4g_mem_size) {
+        x86ms->below_4g_mem_size -= svsm_size;
+        ms->ram_size -= svsm_size;
+    } else {
+        error_report("memory too small for SVSM");
+        exit(EXIT_FAILURE);
+    }
+
+    svsm = g_malloc(sizeof(*svsm));
+    memory_region_init_alias(svsm, NULL, "svsm.ram", ms->ram, ms->ram_size, svsm_size);
+    memory_region_add_subregion(get_system_memory(), svsm_base, svsm);
+
+    printf("Adding SVSM memory 0x%lx-0x%lx\n", svsm_base, svsm_base + svsm_size);
+}
+
 static void tdx_finalize_vm(Notifier *notifier, void *unused)
 {
+    MachineState *ms = MACHINE(qdev_get_machine());
+    TdxGuest *tdx = TDX_GUEST(ms->cgs);
     TdxFirmware *tdvf = &tdx_guest->tdvf;
     TdxFirmwareEntry *entry;
     RAMBlock *ram_block;
     int r;
+
+    if (tdx->svsm_enabled ^ tdvf->svsm_found) {
+        error_report("SVSM image must be used with \"svsm=on\"");
+        exit(1);
+    }
 
     tdx_init_ram_entries();
 
@@ -1360,6 +1407,58 @@ static void tdx_guest_set_quote_generation(Object *obj, Visitor *v,
     tdx->quote_generator = quote_generator;
 }
 
+static bool
+tdx_guest_get_svsm_en(Object *obj, Error **errp)
+{
+    TdxGuest *tdx_guest = TDX_GUEST(obj);
+
+    return !!tdx_guest->svsm_enabled;
+}
+
+static void
+tdx_guest_set_svsm_en(Object *obj, bool value, Error **errp)
+{
+    TdxGuest *tdx_guest = TDX_GUEST(obj);
+
+    tdx_guest->svsm_enabled = value;
+}
+
+static void
+tdx_guest_get_svsm_base(Object *obj, Visitor *v, const char *name,
+                        void *opaque, Error **errp)
+{
+    visit_type_uint64(v, name,
+                      (uint64_t *)&TDX_GUEST(obj)->svsm_base,
+                      errp);
+}
+
+static void
+tdx_guest_set_svsm_base(Object *obj, Visitor *v, const char *name,
+                        void *opaque, Error **errp)
+{
+    visit_type_uint64(v, name,
+                      (uint64_t *)&TDX_GUEST(obj)->svsm_base,
+                      errp);
+}
+
+static void
+tdx_guest_get_svsm_size(Object *obj, Visitor *v, const char *name,
+                        void *opaque, Error **errp)
+{
+    visit_type_uint64(v, name,
+                      (uint64_t *)&TDX_GUEST(obj)->svsm_size,
+                      errp);
+}
+
+static void
+tdx_guest_set_svsm_size(Object *obj, Visitor *v, const char *name,
+                        void *opaque, Error **errp)
+{
+    visit_type_uint64(v, name,
+                      (uint64_t *)&TDX_GUEST(obj)->svsm_size,
+                      errp);
+}
+
 /* tdx guest */
 OBJECT_DEFINE_TYPE_WITH_INTERFACES(TdxGuest,
                                    tdx_guest,
@@ -1367,6 +1466,9 @@ OBJECT_DEFINE_TYPE_WITH_INTERFACES(TdxGuest,
                                    CONFIDENTIAL_GUEST_SUPPORT,
                                    { TYPE_USER_CREATABLE },
                                    { NULL })
+
+#define TDX_SVSM_DEFAULT_BASE   (512 * (1ULL << 30))    /* 512G */
+#define TDX_SVSM_DEFAULT_SIZE   (256 * (1ULL << 20))    /* 256 MB */
 
 static void tdx_guest_init(Object *obj)
 {
@@ -1396,6 +1498,20 @@ static void tdx_guest_init(Object *obj)
 
     tdx->event_notify_vector = -1;
     tdx->event_notify_apicid = -1;
+
+    object_property_add_bool(obj, "svsm",
+                             tdx_guest_get_svsm_en,
+                             tdx_guest_set_svsm_en);
+    object_property_add(obj, "svsmbase", "uint64",
+                        tdx_guest_get_svsm_base,
+                        tdx_guest_set_svsm_base, NULL, NULL);
+    object_property_add(obj, "svsmsize", "uint64",
+                        tdx_guest_get_svsm_size,
+                        tdx_guest_set_svsm_size, NULL, NULL);
+
+    tdx->svsm_enabled = false;
+    tdx->svsm_base = TDX_SVSM_DEFAULT_BASE;
+    tdx->svsm_size = TDX_SVSM_DEFAULT_SIZE;
 
     object_property_add_uint8_ptr(obj, "num-l2-vms", &tdx->num_l2_vms,
                                   OBJ_PROP_FLAG_READWRITE);
