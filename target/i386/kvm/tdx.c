@@ -31,6 +31,7 @@
 #include "hw/i386/tdvf.h"
 #include "hw/i386/tdvf-hob.h"
 #include "hw/pci/msi.h"
+#include "hw/nvram/fw_cfg.h"
 #include "kvm_i386.h"
 #include "tdx.h"
 #include "tdx-quote-generator.h"
@@ -662,6 +663,31 @@ void tdx_mem_init(MachineState *ms)
     memory_region_add_subregion(get_system_memory(), svsm_base, svsm);
 
     printf("Adding SVSM memory 0x%lx-0x%lx\n", svsm_base, svsm_base + svsm_size);
+}
+
+void tdx_init_fw_cfg(MachineState *ms)
+{
+    X86MachineState *x86ms = X86_MACHINE(ms);
+    TdxGuest *tdx;
+    struct content {
+        uint64_t base;
+        uint64_t size;
+    } data;
+
+    if (!is_tdx_vm()) {
+        return;
+    }
+
+    tdx = TDX_GUEST(ms->cgs);
+
+    if (!tdx->svsm_enabled) {
+        return;
+    }
+
+    data.base = cpu_to_le64(tdx->svsm_base);
+    data.size = cpu_to_le64(tdx->svsm_size);
+
+    fw_cfg_add_file(x86ms->fw_cfg, "etc/tdx/svsm", g_memdup(&data, sizeof(data)), sizeof(data));
 }
 
 static void tdx_finalize_vm(Notifier *notifier, void *unused)
