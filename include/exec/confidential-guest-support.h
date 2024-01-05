@@ -27,6 +27,10 @@
 #include "igvm/igvm.h"
 #endif
 
+#if defined(CONFIG_IGVM)
+#include "igvm/igvm.h"
+#endif
+
 #define TYPE_CONFIDENTIAL_GUEST_SUPPORT "confidential-guest-support"
 OBJECT_DECLARE_SIMPLE_TYPE(ConfidentialGuestSupport, CONFIDENTIAL_GUEST_SUPPORT)
 
@@ -94,6 +98,7 @@ struct ConfidentialGuestSupport {
      *                Virtual Machine (IGVM) format.
      */
     char *igvm_filename;
+    IgvmHandle igvm;
 #endif
 
     /*
