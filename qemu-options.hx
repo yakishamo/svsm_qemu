@@ -5637,7 +5637,7 @@ SRST
                  -object secret,id=sec0,keyid=secmaster0,format=base64,\\
                      data=$SECRET,iv=$(<iv.b64)
 
-    ``-object sev-guest,id=id,cbitpos=cbitpos,reduced-phys-bits=val,[sev-device=string,policy=policy,handle=handle,dh-cert-file=file,session-file=file,kernel-hashes=on|off]``
+    ``-object sev-guest,id=id,cbitpos=cbitpos,reduced-phys-bits=val,[sev-device=string,policy=policy,handle=handle,dh-cert-file=file,session-file=file,kernel-hashes=on|off,igvm-file=file]``
         Create a Secure Encrypted Virtualization (SEV) guest object,
         which can be used to provide the guest memory encryption support
         on AMD processors.
@@ -5680,6 +5680,12 @@ SRST
         The ``kernel-hashes`` adds the hashes of given kernel/initrd/
         cmdline to a designated guest firmware page for measured Linux
         boot with -kernel. The default is off. (Since 6.2)
+
+        The ``igvm-file`` is an optional parameter that, when specified,
+        allows an Independent Guest Virtual Machine (IGVM) file to be
+        specified that configures the secure virtual machine and can
+        include, for example, an SVSM module, system firmware, initial
+        boot state, etc.
 
         e.g to launch a SEV guest
 
@@ -5844,7 +5850,6 @@ SRST
 
             (qemu) qom-set /objects/iothread1 poll-max-ns 100000
 ERST
-
 
 HXCOMM This is the last statement. Insert new options before this line!
 

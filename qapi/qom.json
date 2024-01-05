@@ -843,6 +843,18 @@
   'data': { '*filename': 'str' } }
 
 ##
+# @ConfidentialGuestProperties:
+#
+# Properties common to objects that are derivatives of confidential-guest-support.
+#
+# @igvm-file: IGVM file to use to configure guest (default: none)
+#
+# Since: 8.2
+##
+{ 'struct': 'ConfidentialGuestProperties',
+  'data': { '*igvm-file': 'str' } }
+
+##
 # @SevCommonProperties:
 #
 # Properties common to objects that are derivatives of sev-common.
@@ -861,6 +873,7 @@
 # Since: 2.12
 ##
 { 'struct': 'SevCommonProperties',
+  'base': 'ConfidentialGuestProperties',
   'data': { '*sev-device': 'str',
             '*cbitpos': 'uint32',
             'reduced-phys-bits': 'uint32',
