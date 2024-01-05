@@ -14,6 +14,8 @@
 #include "qemu/osdep.h"
 
 #include "exec/confidential-guest-support.h"
+#include "qemu/error-report.h"
+#include "qapi/error.h"
 
 OBJECT_DEFINE_ABSTRACT_TYPE(ConfidentialGuestSupport,
                             confidential_guest_support,
@@ -45,8 +47,38 @@ static void confidential_guest_support_class_init(ObjectClass *oc, void *data)
 #endif
 }
 
+static int check_support(ConfidentialGuestPlatformType platform,
+                         uint16_t platform_version, uint8_t highest_vtl,
+                         uint64_t shared_gpa_boundary)
+{
+    /* Default: no support. */
+    return 0;
+}
+
+static int set_guest_state(hwaddr gpa, uint8_t *ptr, uint64_t len,
+                           ConfidentialGuestPageType memory_type,
+                           uint16_t cpu_index, Error **errp)
+{
+    error_setg(errp,
+               "Setting confidential guest state is not supported for this platform");
+    return -1;
+}
+
+static int get_mem_map_entry(int index, ConfidentialGuestMemoryMapEntry *entry,
+                             Error **errp)
+{
+    error_setg(
+        errp,
+        "Obtaining the confidential guest memory map is not supported for this platform");
+    return -1;
+}
+
 static void confidential_guest_support_init(Object *obj)
 {
+    ConfidentialGuestSupport *cgs = CONFIDENTIAL_GUEST_SUPPORT(obj);
+    cgs->check_support = check_support;
+    cgs->set_guest_state = set_guest_state;
+    cgs->get_mem_map_entry = get_mem_map_entry;
 }
 
 static void confidential_guest_support_finalize(Object *obj)
