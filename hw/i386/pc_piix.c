@@ -67,6 +67,7 @@
 #include "hw/i386/acpi-build.h"
 #include "kvm/kvm-cpu.h"
 #include "target/i386/cpu.h"
+#include "exec/confidential-guest-support.h"
 
 #define MAX_IDE_BUS 2
 #define XEN_IOAPIC_NUM_PIRQS 128ULL
@@ -392,6 +393,9 @@ static void pc_init1(MachineState *machine,
                                x86_nvdimm_acpi_dsmio,
                                x86ms->fw_cfg, OBJECT(pcms));
     }
+
+    /* Apply confidential guest state from IGVM if supplied */
+    cgs_process_igvm(machine->cgs);
 }
 
 typedef enum PCSouthBridgeOption {
