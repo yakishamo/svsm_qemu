@@ -32,7 +32,10 @@
 #endif
 
 #define TYPE_CONFIDENTIAL_GUEST_SUPPORT "confidential-guest-support"
-OBJECT_DECLARE_SIMPLE_TYPE(ConfidentialGuestSupport, CONFIDENTIAL_GUEST_SUPPORT)
+OBJECT_DECLARE_TYPE(ConfidentialGuestSupport,
+                    ConfidentialGuestSupportClass,
+                    CONFIDENTIAL_GUEST_SUPPORT)
+
 
 typedef enum ConfidentialGuestPlatformType {
     CGS_PLATFORM_SEV,
@@ -144,6 +147,9 @@ struct ConfidentialGuestSupport {
 
 typedef struct ConfidentialGuestSupportClass {
     ObjectClass parent;
+
+    int (*kvm_init)(ConfidentialGuestSupport *cgs, Error **errp);
+    int (*kvm_reset)(ConfidentialGuestSupport *cgs, Error **errp);
 } ConfidentialGuestSupportClass;
 
 /*
@@ -162,6 +168,32 @@ bool cgs_is_igvm(ConfidentialGuestSupport *cgs);
  * guest memory, including firmware and initial CPU state.
  */
 void cgs_process_igvm(ConfidentialGuestSupport *cgs);
+
+static inline int confidential_guest_kvm_init(ConfidentialGuestSupport *cgs,
+                                              Error **errp)
+{
+    ConfidentialGuestSupportClass *klass;
+
+    klass = CONFIDENTIAL_GUEST_SUPPORT_GET_CLASS(cgs);
+    if (klass->kvm_init) {
+        return klass->kvm_init(cgs, errp);
+    }
+
+    return 0;
+}
+
+static inline int confidential_guest_kvm_reset(ConfidentialGuestSupport *cgs,
+                                               Error **errp)
+{
+    ConfidentialGuestSupportClass *klass;
+
+    klass = CONFIDENTIAL_GUEST_SUPPORT_GET_CLASS(cgs);
+    if (klass->kvm_reset) {
+        return klass->kvm_reset(cgs, errp);
+    }
+
+    return 0;
+}
 
 #endif /* !CONFIG_USER_ONLY */
 
