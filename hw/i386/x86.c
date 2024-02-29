@@ -1391,7 +1391,7 @@ static int x86_kvm_type(MachineState *ms, const char *vm_type)
     X86MachineState *x86ms = X86_MACHINE(ms);
     int kvm_type;
 
-    kvm_type = kvm_get_vm_type(ms, vm_type);
+    kvm_type = kvm_enabled() ? kvm_get_vm_type(ms, vm_type) : 0;
     x86ms->vm_type = kvm_type;
 
     if (kvm_type > 0) {
