@@ -3647,30 +3647,18 @@ void memory_region_init_ram(MemoryRegion *mr,
     vmstate_register_ram(mr, owner_dev);
 }
 
-void memory_region_init_ram_guest_memfd(MemoryRegion *mr,
+bool memory_region_init_ram_guest_memfd(MemoryRegion *mr,
                                         Object *owner,
                                         const char *name,
                                         uint64_t size,
                                         Error **errp)
 {
     DeviceState *owner_dev;
-    Error *err = NULL;
 
-    /*
-     * TODO: drop this whole function and just have memory_region_init_ram()
-     * handle this case automatically.
-     */
-    if (!kvm_has_restricted_memory()) {
-        return memory_region_init_ram(mr, owner, name, size, errp);
+    if (!memory_region_init_ram_flags_nomigrate(mr, owner, name, size,
+                                                RAM_GUEST_MEMFD, errp)) {
+        return false;
     }
-
-    memory_region_init_ram_flags_nomigrate(mr, owner, name, size,
-                                           RAM_GUEST_MEMFD, &err);
-    if (err) {
-        error_propagate(errp, err);
-        return;
-    }
-    memory_region_set_default_private(mr);
 
     /* This will assert if owner is neither NULL nor a DeviceState.
      * We only want the owner here for the purposes of defining a
@@ -3680,6 +3668,8 @@ void memory_region_init_ram_guest_memfd(MemoryRegion *mr,
      */
     owner_dev = DEVICE(owner);
     vmstate_register_ram(mr, owner_dev);
+
+    return true;
 }
 
 bool memory_region_init_rom(MemoryRegion *mr,

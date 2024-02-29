@@ -1593,7 +1593,7 @@ void memory_region_init_ram(MemoryRegion *mr,
                             uint64_t size,
                             Error **errp);
 
-void memory_region_init_ram_guest_memfd(MemoryRegion *mr,
+bool memory_region_init_ram_guest_memfd(MemoryRegion *mr,
                                         Object *owner,
                                         const char *name,
                                         uint64_t size,
