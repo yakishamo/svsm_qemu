@@ -58,6 +58,7 @@ struct X86MachineState {
     uint64_t above_4g_mem_start;
 
     /* CPU and apic information: */
+    bool eoi_intercept_unsupported;
     bool apic_xrupt_override;
     unsigned pci_irq_mask;
     unsigned apic_id_limit;
