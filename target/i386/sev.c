@@ -795,42 +795,6 @@ sev_guest_set_session_file(Object *obj, const char *value, Error **errp)
 }
 
 static void
-sev_guest_class_init(ObjectClass *oc, void *data)
-{
-    object_class_property_add_str(oc, "dh-cert-file",
-                                  sev_guest_get_dh_cert_file,
-                                  sev_guest_set_dh_cert_file);
-    object_class_property_set_description(oc, "dh-cert-file",
-            "guest owners DH certificate (encoded with base64)");
-    object_class_property_add_str(oc, "session-file",
-                                  sev_guest_get_session_file,
-                                  sev_guest_set_session_file);
-    object_class_property_set_description(oc, "session-file",
-            "guest owners session parameters (encoded with base64)");
-}
-
-static void
-sev_guest_instance_init(Object *obj)
-{
-    SevGuestState *sev_guest = SEV_GUEST(obj);
-
-    sev_guest->policy = DEFAULT_GUEST_POLICY;
-    object_property_add_uint32_ptr(obj, "handle", &sev_guest->handle,
-                                   OBJ_PROP_FLAG_READWRITE);
-    object_property_add_uint32_ptr(obj, "policy", &sev_guest->policy,
-                                   OBJ_PROP_FLAG_READWRITE);
-}
-
-/* guest info specific sev/sev-es */
-static const TypeInfo sev_guest_info = {
-    .parent = TYPE_SEV_COMMON,
-    .name = TYPE_SEV_GUEST,
-    .instance_size = sizeof(SevGuestState),
-    .instance_init = sev_guest_instance_init,
-    .class_init = sev_guest_class_init,
-};
-
-static void
 sev_snp_guest_get_init_flags(Object *obj, Visitor *v, const char *name,
                              void *opaque, Error **errp)
 {
@@ -2024,9 +1988,9 @@ sev_vm_state_change(void *opaque, bool running, RunState state)
     }
 }
 
-int sev_kvm_init(MachineState *ms, Error **errp)
+static int sev_kvm_init(ConfidentialGuestSupport *cgs, Error **errp)
 {
-    ConfidentialGuestSupport *cgs = ms->cgs;
+    MachineState *ms = MACHINE(qdev_get_machine());
     SevCommonState *sev_common = SEV_COMMON(cgs);
     char *devname;
     int ret, fw_error, cmd;
@@ -2106,7 +2070,7 @@ int sev_kvm_init(MachineState *ms, Error **errp)
         cmd = KVM_SEV_SNP_INIT;
         init_args = (void *)&sev_snp_guest->kvm_init_conf;
         trace_kvm_sev_init("SEV-SNP", sev_snp_guest->kvm_init_conf.flags);
-                ms->require_guest_memfd = true;
+        ms->require_guest_memfd = true;
     } else if (sev_es_enabled()) {
         if (!kvm_kernel_irqchip_allowed()) {
             error_report("%s: SEV-ES guests require in-kernel irqchip support",
@@ -2629,6 +2593,50 @@ bool sev_add_kernel_loader_hashes(SevKernelLoaderContext *ctx, Error **errp)
 
     return ret;
 }
+
+static void
+sev_guest_class_init(ObjectClass *oc, void *data)
+{
+    ConfidentialGuestSupportClass *klass = CONFIDENTIAL_GUEST_SUPPORT_CLASS(oc);
+
+    klass->kvm_init = sev_kvm_init;
+
+    object_class_property_add_str(oc, "dh-cert-file",
+                                  sev_guest_get_dh_cert_file,
+                                  sev_guest_set_dh_cert_file);
+    object_class_property_set_description(oc, "dh-cert-file",
+            "guest owners DH certificate (encoded with base64)");
+    object_class_property_add_str(oc, "session-file",
+                                  sev_guest_get_session_file,
+                                  sev_guest_set_session_file);
+    object_class_property_set_description(oc, "session-file",
+            "guest owners session parameters (encoded with base64)");
+}
+
+static void
+sev_guest_instance_init(Object *obj)
+{
+    SevGuestState *sev = SEV_GUEST(obj);
+
+    sev->policy = DEFAULT_GUEST_POLICY;
+    object_property_add_uint32_ptr(obj, "policy", &sev->policy,
+                                   OBJ_PROP_FLAG_READWRITE);
+    object_property_add_uint32_ptr(obj, "handle", &sev->handle,
+                                   OBJ_PROP_FLAG_READWRITE);
+}
+
+/* sev guest info */
+static const TypeInfo sev_guest_info = {
+    .parent = TYPE_CONFIDENTIAL_GUEST_SUPPORT,
+    .name = TYPE_SEV_GUEST,
+    .instance_size = sizeof(SevGuestState),
+    .class_init = sev_guest_class_init,
+    .instance_init = sev_guest_instance_init,
+    /*.interfaces = (InterfaceInfo[]) {
+        { TYPE_USER_CREATABLE },
+        { }
+    }*/
+};
 
 #define GHCB_MSR_PSC_OP_PRIVATE     1
 #define GHCB_MSR_PSC_OP_SHARED      2

@@ -2541,15 +2541,6 @@ int kvm_arch_get_default_type(MachineState *ms)
     return 0;
 }
 
-static int kvm_confidential_guest_init(MachineState *ms, Error **errp)
-{
-    if (object_dynamic_cast(OBJECT(ms->cgs), TYPE_SEV_COMMON)) {
-        return sev_kvm_init(ms, errp);
-    }
-
-    return 0;
-}
-
 int kvm_arch_init(MachineState *ms, KVMState *s)
 {
     uint64_t identity_base = 0xfffbc000;
@@ -2570,10 +2561,12 @@ int kvm_arch_init(MachineState *ms, KVMState *s)
      * mechanisms are supported in future (e.g. TDX), they'll need
      * their own initialization either here or elsewhere.
      */
-    ret = kvm_confidential_guest_init(ms, &local_err);
-    if (ret < 0) {
-        error_report_err(local_err);
-        return ret;
+    if (ms->cgs) {
+        ret = confidential_guest_kvm_init(ms->cgs, &local_err);
+        if (ret < 0) {
+            error_report_err(local_err);
+            return ret;
+        }
     }
 
     has_xcrs = kvm_check_extension(s, KVM_CAP_XCRS);
