@@ -688,6 +688,13 @@ void tdx_init_fw_cfg(MachineState *ms)
     data.size = cpu_to_le64(tdx->svsm_size);
 
     fw_cfg_add_file(x86ms->fw_cfg, "etc/tdx/svsm", g_memdup(&data, sizeof(data)), sizeof(data));
+
+    if (tdx->bios2_region) {
+        data.base = cpu_to_le64((uint64_t)memory_region_to_absolute_addr(tdx->bios2_region, 0));
+        data.size = cpu_to_le64(memory_region_size(tdx->bios2_region));
+        fw_cfg_add_file(x86ms->fw_cfg, "etc/tdx/l2bios",
+                g_memdup(&data, sizeof(data)), sizeof(data));
+    }
 }
 
 static void tdx_finalize_vm(Notifier *notifier, void *unused)
