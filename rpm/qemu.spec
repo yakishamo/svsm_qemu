@@ -120,6 +120,7 @@ BuildRequires:  gcc-32bit
 BuildRequires:  xen-devel >= 4.2
 %endif
 BuildRequires:  pkgconfig(libpmem)
+BuildRequires:  igvm-devel
 %endif
 %ifnarch %arm s390x
 BuildRequires:  libnuma-devel
@@ -675,6 +676,7 @@ EXTRA_CFLAGS="$(echo %{optflags} | sed -E 's/-[A-Z]?_FORTIFY_SOURCE[=]?[0-9]*//g
 %ifarch x86_64
 	--enable-avx2 \
 	--enable-libpmem \
+	--enable-igvm \
 %if %{with_xen}
 	--enable-xen \
 	--enable-xen-pci-passthrough \
