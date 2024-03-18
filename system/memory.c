@@ -34,6 +34,7 @@
 #include "hw/boards.h"
 #include "migration/vmstate.h"
 #include "exec/address-spaces.h"
+#include "qemu/memfd.h"
 
 //#define DEBUG_UNASSIGNED
 
@@ -1724,12 +1725,47 @@ void memory_region_init_rom_device_nomigrate(MemoryRegion *mr,
     mr->terminates = true;
     mr->rom_device = true;
     mr->destructor = memory_region_destructor_ram;
-    mr->ram_block = qemu_ram_alloc(size, 0, mr, &err);
+    if (kvm_has_restricted_memory()) {
+        mr->ram_block = qemu_ram_alloc(size, RAM_GUEST_MEMFD, mr, &err);
+    } else {
+        mr->ram_block = qemu_ram_alloc(size, 0, mr, &err);
+    }
     if (err) {
         mr->size = int128_zero();
         object_unparent(OBJECT(mr));
         error_propagate(errp, err);
     }
+}
+
+void memory_region_init_rom_device_private(MemoryRegion *mr,
+                                           Object *owner,
+                                           const MemoryRegionOps *ops,
+                                           void *opaque,
+                                           const char *name,
+                                           uint64_t size,
+                                           Error **errp)
+{
+#if 0
+    DeviceState *owner_dev;
+    Error *err = NULL;
+
+    g_warning("creating ROM device with private memory.");
+
+    memory_region_init_rom_device_nomigrate_private(mr, owner, ops, opaque,
+                                                    name, size, &err);
+    if (err) {
+        error_propagate(errp, err);
+        return;
+    }
+    /* This will assert if owner is neither NULL nor a DeviceState.
+     * We only want the owner here for the purposes of defining a
+     * unique name for migration. TODO: Ideally we should implement
+     * a naming scheme for Objects which are not DeviceStates, in
+     * which case we can relax this restriction.
+     */
+    owner_dev = DEVICE(owner);
+    vmstate_register_ram(mr, owner_dev);
+#endif
 }
 
 void memory_region_init_iommu(void *_iommu_mr,
@@ -1832,6 +1868,24 @@ bool memory_region_is_ram_device(MemoryRegion *mr)
 bool memory_region_is_protected(MemoryRegion *mr)
 {
     return mr->ram && (mr->ram_block->flags & RAM_PROTECTED);
+}
+
+bool memory_region_has_guest_memfd(MemoryRegion *mr)
+{
+    return mr->ram_block && mr->ram_block->guest_memfd >= 0;
+}
+
+bool memory_region_is_default_private(MemoryRegion *mr)
+{
+    return memory_region_has_guest_memfd(mr) &&
+           (mr->ram_block->flags & RAM_DEFAULT_PRIVATE);
+}
+
+void memory_region_set_default_private(MemoryRegion *mr)
+{
+    if (memory_region_has_guest_memfd(mr)) {
+        mr->ram_block->flags |= RAM_DEFAULT_PRIVATE;
+    }
 }
 
 uint8_t memory_region_get_dirty_log_mask(MemoryRegion *mr)
@@ -3576,6 +3630,41 @@ void memory_region_init_ram(MemoryRegion *mr,
         error_propagate(errp, err);
         return;
     }
+    /* This will assert if owner is neither NULL nor a DeviceState.
+     * We only want the owner here for the purposes of defining a
+     * unique name for migration. TODO: Ideally we should implement
+     * a naming scheme for Objects which are not DeviceStates, in
+     * which case we can relax this restriction.
+     */
+    owner_dev = DEVICE(owner);
+    vmstate_register_ram(mr, owner_dev);
+}
+
+void memory_region_init_ram_guest_memfd(MemoryRegion *mr,
+                                        Object *owner,
+                                        const char *name,
+                                        uint64_t size,
+                                        Error **errp)
+{
+    DeviceState *owner_dev;
+    Error *err = NULL;
+
+    /*
+     * TODO: drop this whole function and just have memory_region_init_ram()
+     * handle this case automatically.
+     */
+    if (!kvm_has_restricted_memory()) {
+        return memory_region_init_ram(mr, owner, name, size, errp);
+    }
+
+    memory_region_init_ram_flags_nomigrate(mr, owner, name, size,
+                                           RAM_GUEST_MEMFD, &err);
+    if (err) {
+        error_propagate(errp, err);
+        return;
+    }
+    memory_region_set_default_private(mr);
+
     /* This will assert if owner is neither NULL nor a DeviceState.
      * We only want the owner here for the purposes of defining a
      * unique name for migration. TODO: Ideally we should implement

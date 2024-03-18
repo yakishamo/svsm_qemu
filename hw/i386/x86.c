@@ -1166,7 +1166,7 @@ void x86_bios_rom_init(MachineState *ms, const char *default_firmware,
          */
         void *ptr = memory_region_get_ram_ptr(bios);
         load_image_size(filename, ptr, bios_size);
-        x86_firmware_configure(ptr, bios_size);
+        x86_firmware_configure(0x100000000ULL - bios_size, ptr, bios_size);
     } else {
         if (!isapc_ram_fw) {
             memory_region_set_readonly(bios, true);
@@ -1386,6 +1386,27 @@ static void machine_set_sgx_epc(Object *obj, Visitor *v, const char *name,
     qapi_free_SgxEPCList(list);
 }
 
+static int x86_kvm_type(MachineState *ms, const char *vm_type)
+{
+    X86MachineState *x86ms = X86_MACHINE(ms);
+    int kvm_type;
+
+    kvm_type = kvm_get_vm_type(ms, vm_type);
+    x86ms->vm_type = kvm_type;
+
+    if (kvm_type > 0) {
+        ms->require_guest_memfd = true;
+        if (x86ms->smm == ON_OFF_AUTO_AUTO) {
+            x86ms->smm = ON_OFF_AUTO_OFF;
+        } else if (x86ms->smm == ON_OFF_AUTO_ON) {
+            error_report("VM type doesn't support SMM");
+            return -EINVAL;
+        }
+    }
+
+    return kvm_type;
+}
+
 static void x86_machine_initfn(Object *obj)
 {
     X86MachineState *x86ms = X86_MACHINE(obj);
@@ -1410,6 +1431,7 @@ static void x86_machine_class_init(ObjectClass *oc, void *data)
     mc->cpu_index_to_instance_props = x86_cpu_index_to_props;
     mc->get_default_cpu_node_id = x86_get_default_cpu_node_id;
     mc->possible_cpu_arch_ids = x86_possible_cpu_arch_ids;
+    mc->kvm_type = x86_kvm_type;
     x86mc->save_tsc_khz = true;
     x86mc->fwcfg_dma_enabled = true;
     nc->nmi_monitor_handler = x86_nmi;

@@ -54,8 +54,8 @@ static void pc_isa_bios_init(MemoryRegion *rom_memory,
     /* map the last 128KB of the BIOS in ISA space */
     isa_bios_size = MIN(flash_size, 128 * KiB);
     isa_bios = g_malloc(sizeof(*isa_bios));
-    memory_region_init_ram(isa_bios, NULL, "isa-bios", isa_bios_size,
-                           &error_fatal);
+    memory_region_init_ram_guest_memfd(isa_bios, NULL, "isa-bios", isa_bios_size,
+                                       &error_fatal);
     memory_region_add_subregion_overlap(rom_memory,
                                         0x100000 - isa_bios_size,
                                         isa_bios,
@@ -151,6 +151,8 @@ static void pc_system_flash_map(PCMachineState *pcms,
     assert(PC_MACHINE_GET_CLASS(pcms)->pci_enabled);
 
     for (i = 0; i < ARRAY_SIZE(pcms->flash); i++) {
+        hwaddr gpa;
+
         system_flash = pcms->flash[i];
         blk = pflash_cfi01_get_blk(system_flash);
         if (!blk) {
@@ -180,11 +182,11 @@ static void pc_system_flash_map(PCMachineState *pcms,
         }
 
         total_size += size;
+        gpa = 0x100000000ULL - total_size; /* where the flash is mapped */
         qdev_prop_set_uint32(DEVICE(system_flash), "num-blocks",
                              size / FLASH_SECTOR_SIZE);
         sysbus_realize_and_unref(SYS_BUS_DEVICE(system_flash), &error_fatal);
-        sysbus_mmio_map(SYS_BUS_DEVICE(system_flash), 0,
-                        0x100000000ULL - total_size);
+        sysbus_mmio_map(SYS_BUS_DEVICE(system_flash), 0, gpa);
 
         if (i == 0) {
             flash_mem = pflash_cfi01_get_memory(system_flash);
@@ -194,7 +196,7 @@ static void pc_system_flash_map(PCMachineState *pcms,
             if (sev_enabled()) {
                 flash_ptr = memory_region_get_ram_ptr(flash_mem);
                 flash_size = memory_region_size(flash_mem);
-                x86_firmware_configure(flash_ptr, flash_size);
+                x86_firmware_configure(gpa, flash_ptr, flash_size);
             }
         }
     }
@@ -228,8 +230,13 @@ void pc_system_firmware_init(PCMachineState *pcms,
     }
 
     if (!pflash_blk[0]) {
-        /* Machine property pflash0 not set, use ROM mode */
-        x86_bios_rom_init(MACHINE(pcms), "bios.bin", rom_memory, false);
+        /*
+         * Machine property pflash0 not set, use ROM mode unless using IGVM,
+         * in which case the firmware must be provided by the IGVM file.
+         */
+        if (!cgs_is_igvm(MACHINE(pcms)->cgs)) {
+            x86_bios_rom_init(MACHINE(pcms), "bios.bin", rom_memory, false);
+        }
     } else {
         if (kvm_enabled() && !kvm_readonly_mem_enabled()) {
             /*
@@ -245,9 +252,22 @@ void pc_system_firmware_init(PCMachineState *pcms,
     }
 
     pc_system_flash_cleanup_unused(pcms);
+
+    /*
+     * The user should not have specified any pflash devices when using IGVM
+     * to configure the guest.
+     */
+    if (cgs_is_igvm(MACHINE(pcms)->cgs)) {
+        for (i = 0; i < ARRAY_SIZE(pcms->flash); i++) {
+            if (pcms->flash[i]) {
+                error_report("pflash devices cannot be configured when using IGVM");
+                exit(1);
+            }
+        }
+    }
 }
 
-void x86_firmware_configure(void *ptr, int size)
+void x86_firmware_configure(hwaddr gpa, void *ptr, int size)
 {
     int ret;
 
@@ -264,6 +284,6 @@ void x86_firmware_configure(void *ptr, int size)
             exit(1);
         }
 
-        sev_encrypt_flash(ptr, size, &error_fatal);
+        sev_encrypt_flash(gpa, ptr, size, &error_fatal);
     }
 }

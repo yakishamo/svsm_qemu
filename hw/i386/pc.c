@@ -1037,8 +1037,8 @@ void pc_memory_init(PCMachineState *pcms,
     pc_system_firmware_init(pcms, rom_memory);
 
     option_rom_mr = g_malloc(sizeof(*option_rom_mr));
-    memory_region_init_ram(option_rom_mr, NULL, "pc.rom", PC_ROM_SIZE,
-                           &error_fatal);
+    memory_region_init_ram_guest_memfd(option_rom_mr, NULL, "pc.rom", PC_ROM_SIZE,
+                                       &error_fatal);
     if (pcmc->pci_enabled) {
         memory_region_set_readonly(option_rom_mr, true);
     }
@@ -1753,11 +1753,6 @@ static void pc_machine_initfn(Object *obj)
     object_property_add_alias(OBJECT(pcms), "pcspk-audiodev",
                               OBJECT(pcms->pcspk), "audiodev");
     cxl_machine_init(obj, &pcms->cxl_devices_state);
-}
-
-int pc_machine_kvm_type(MachineState *machine, const char *kvm_type)
-{
-    return 0;
 }
 
 static void pc_machine_reset(MachineState *machine, ShutdownCause reason)
