@@ -554,8 +554,7 @@ static int cgs_set_guest_state(hwaddr gpa, uint8_t *ptr, uint64_t len,
         case CGS_PAGE_TYPE_ZERO:
             if (sev_snp_enabled()) {
                 ret = snp_launch_update_data(gpa, ptr, len,
-                (memory_type == CGS_PAGE_TYPE_NORMAL) ?
-                    KVM_SEV_SNP_PAGE_TYPE_NORMAL : KVM_SEV_SNP_PAGE_TYPE_ZERO);
+                                             KVM_SEV_SNP_PAGE_TYPE_NORMAL);
             }
             else {
                 ret = sev_launch_update_data(SEV_GUEST(MACHINE(qdev_get_machine())->cgs),
