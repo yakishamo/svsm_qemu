@@ -2066,7 +2066,7 @@ sev_snp_launch_finish(SevSnpGuestState *sev_snp)
                                     sev_snp->host_data);
     ret = sev_ioctl(SEV_COMMON(sev_snp)->sev_fd, KVM_SEV_SNP_LAUNCH_FINISH,
                     finish, &error);
-    if (ret) {
+    if (ret || error) {
         error_report("%s: SNP_LAUNCH_FINISH ret=%d fw_error=%d '%s'",
                      __func__, ret, error, fw_error_to_str(error));
         exit(1);
