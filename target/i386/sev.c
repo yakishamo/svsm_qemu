@@ -433,7 +433,23 @@ static void sev_apply_cpu_context(CPUState *cpu)
                 launch_vmsa->vmsa.ss.base, launch_vmsa->vmsa.ss.limit,
                 FLAGS_VMSA_TO_SEGCACHE(launch_vmsa->vmsa.ss.attrib));
 
-                        env->dr[6] = launch_vmsa->vmsa.dr6;
+            env->gdt.base = launch_vmsa->vmsa.gdtr.base;
+            env->gdt.limit = launch_vmsa->vmsa.gdtr.limit;
+            env->gdt.flags = FLAGS_VMSA_TO_SEGCACHE(launch_vmsa->vmsa.gdtr.attrib);
+            env->idt.base = launch_vmsa->vmsa.idtr.base;
+            env->idt.limit = launch_vmsa->vmsa.idtr.limit;
+            env->idt.flags = FLAGS_VMSA_TO_SEGCACHE(launch_vmsa->vmsa.idtr.attrib);
+
+            cpu_x86_load_seg_cache(
+                env, R_LDTR, launch_vmsa->vmsa.ldtr.selector,
+                launch_vmsa->vmsa.ldtr.base, launch_vmsa->vmsa.ldtr.limit,
+                FLAGS_VMSA_TO_SEGCACHE(launch_vmsa->vmsa.ldtr.attrib));
+            cpu_x86_load_seg_cache(
+                env, R_TR, launch_vmsa->vmsa.tr.selector,
+                launch_vmsa->vmsa.ldtr.base, launch_vmsa->vmsa.tr.limit,
+                FLAGS_VMSA_TO_SEGCACHE(launch_vmsa->vmsa.tr.attrib));
+
+            env->dr[6] = launch_vmsa->vmsa.dr6;
             env->dr[7] = launch_vmsa->vmsa.dr7;
 
             env->regs[R_EAX] = launch_vmsa->vmsa.rax;
@@ -482,7 +498,11 @@ static int check_vmsa_supported(const struct sev_es_save_area *vmsa)
     memset(&vmsa_check.ds, 0, sizeof(vmsa_check.ds));
     memset(&vmsa_check.fs, 0, sizeof(vmsa_check.fs));
     memset(&vmsa_check.gs, 0, sizeof(vmsa_check.gs));
-        vmsa_check.efer = 0;
+    memset(&vmsa_check.gdtr, 0, sizeof(vmsa_check.gdtr));
+    memset(&vmsa_check.idtr, 0, sizeof(vmsa_check.idtr));
+    memset(&vmsa_check.ldtr, 0, sizeof(vmsa_check.ldtr));
+    memset(&vmsa_check.tr, 0, sizeof(vmsa_check.tr));
+    vmsa_check.efer = 0;
     vmsa_check.cr0 = 0;
     vmsa_check.cr3 = 0;
     vmsa_check.cr4 = 0;
