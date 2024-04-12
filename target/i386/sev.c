@@ -433,6 +433,22 @@ static void sev_apply_cpu_context(CPUState *cpu)
                 launch_vmsa->vmsa.ss.base, launch_vmsa->vmsa.ss.limit,
                 FLAGS_VMSA_TO_SEGCACHE(launch_vmsa->vmsa.ss.attrib));
 
+            env->gdt.base = launch_vmsa->vmsa.gdtr.base;
+            env->gdt.limit = launch_vmsa->vmsa.gdtr.limit;
+            env->gdt.flags = FLAGS_VMSA_TO_SEGCACHE(launch_vmsa->vmsa.gdtr.attrib);
+            env->idt.base = launch_vmsa->vmsa.idtr.base;
+            env->idt.limit = launch_vmsa->vmsa.idtr.limit;
+            env->idt.flags = FLAGS_VMSA_TO_SEGCACHE(launch_vmsa->vmsa.idtr.attrib);
+
+            cpu_x86_load_seg_cache(
+                env, R_LDTR, launch_vmsa->vmsa.ldtr.selector,
+                launch_vmsa->vmsa.ldtr.base, launch_vmsa->vmsa.ldtr.limit,
+                FLAGS_VMSA_TO_SEGCACHE(launch_vmsa->vmsa.ldtr.attrib));
+            cpu_x86_load_seg_cache(
+                env, R_TR, launch_vmsa->vmsa.tr.selector,
+                launch_vmsa->vmsa.ldtr.base, launch_vmsa->vmsa.tr.limit,
+                FLAGS_VMSA_TO_SEGCACHE(launch_vmsa->vmsa.tr.attrib));
+
             env->dr[6] = launch_vmsa->vmsa.dr6;
             env->dr[7] = launch_vmsa->vmsa.dr7;
 
@@ -482,6 +498,10 @@ static int check_vmsa_supported(const struct sev_es_save_area *vmsa)
     memset(&vmsa_check.ds, 0, sizeof(vmsa_check.ds));
     memset(&vmsa_check.fs, 0, sizeof(vmsa_check.fs));
     memset(&vmsa_check.gs, 0, sizeof(vmsa_check.gs));
+    memset(&vmsa_check.gdtr, 0, sizeof(vmsa_check.gdtr));
+    memset(&vmsa_check.idtr, 0, sizeof(vmsa_check.idtr));
+    memset(&vmsa_check.ldtr, 0, sizeof(vmsa_check.ldtr));
+    memset(&vmsa_check.tr, 0, sizeof(vmsa_check.tr));
     vmsa_check.efer = 0;
     vmsa_check.cr0 = 0;
     vmsa_check.cr3 = 0;
@@ -667,6 +687,83 @@ out:
     return ret;
 }
 
+static int cgs_set_guest_policy(ConfidentialGuestPolicyType policy_type,
+                            uint64_t policy,
+                            void *policy_data1, uint32_t policy_data1_size,
+                            void *policy_data2, uint32_t policy_data2_size,
+                            Error **errp)
+{
+    if (policy_type != GUEST_POLICY_SEV) {
+        error_setg(errp, "%s: Invalid guest policy type provided for SEV: %d",
+        __func__, policy_type);
+        return -1;
+    }
+    /*
+     * SEV-SNP handles policy differently. The policy flags are defined in
+     * kvm_start_conf.policy and an ID block and ID auth can be provided.
+     */
+    if (sev_snp_enabled()) {
+        SevSnpGuestState *sev_snp_guest = SEV_SNP_GUEST(MACHINE(qdev_get_machine())->cgs);
+        struct kvm_sev_snp_launch_finish *finish = &sev_snp_guest->kvm_finish_conf;
+
+        /*
+        * The policy consists of flags in 'policy' and optionally an ID block and
+        * ID auth in policy_data1 and policy_data2 respectively.
+        * The ID block and auth are optional so clear any previous ID block and
+        * auth and set them if provided, but always set the policy flags.
+        */
+        g_free(sev_snp_guest->id_block);
+        g_free((guchar *)finish->id_block_uaddr);
+        g_free(sev_snp_guest->id_auth);
+        g_free((guchar *)finish->id_auth_uaddr);
+        sev_snp_guest->id_block = NULL;
+        finish->id_block_uaddr = 0;
+        sev_snp_guest->id_auth = NULL;
+        finish->id_auth_uaddr = 0;
+
+        if (policy_data1_size > 0) {
+            struct sev_snp_id_authentication *id_auth = (struct sev_snp_id_authentication *)policy_data2;
+
+            if (policy_data1_size != KVM_SEV_SNP_ID_BLOCK_SIZE) {
+                error_setg(errp, "%s: Invalid SEV-SNP ID block: incorrect size",
+                        __func__);
+                return -1;
+            }
+            if (policy_data2_size != KVM_SEV_SNP_ID_AUTH_SIZE) {
+                error_setg(errp, "%s: Invalid SEV-SNP ID auth block: incorrect size",
+                        __func__);
+                return -1;
+            }
+            finish->id_block_uaddr = (__u64)g_malloc0(KVM_SEV_SNP_ID_BLOCK_SIZE);
+            finish->id_auth_uaddr = (__u64)g_malloc0(KVM_SEV_SNP_ID_AUTH_SIZE);
+            memcpy((void *)finish->id_block_uaddr, policy_data1, KVM_SEV_SNP_ID_BLOCK_SIZE);
+            memcpy((void *)finish->id_auth_uaddr, policy_data2, KVM_SEV_SNP_ID_AUTH_SIZE);
+
+            /*
+             * Check if an author key has been provided and use that to flag
+             * whether the author key is enabled. The first of the author key
+             * must be non-zero to indicate the key type, which will currently
+             * always be 2.
+             */
+            sev_snp_guest->kvm_finish_conf.auth_key_en =
+                    id_auth->author_key[0] ? 1 : 0;
+            finish->id_block_en = 1;
+        }
+        sev_snp_guest->kvm_start_conf.policy = policy;
+    }
+    else {
+        SevGuestState *sev_guest = SEV_GUEST(MACHINE(qdev_get_machine())->cgs);
+        /* Only the policy flags are supported for SEV and SEV-ES */
+        if ((policy_data1_size > 0) || (policy_data2_size > 0) || !sev_guest) {
+            error_setg(errp, "%s: An ID block/ID auth block has been provided "
+                             "but SEV-SNP is not supported", __func__);
+            return -1;
+        }
+        sev_guest->policy = policy;
+    }
+    return 0;
+}
+
 static int cgs_get_mem_map_entry(int index,
                                  ConfidentialGuestMemoryMapEntry *entry,
                                  Error **errp)
@@ -749,6 +846,7 @@ sev_common_instance_init(Object *obj)
 
     cgs->check_support = cgs_check_support;
     cgs->set_guest_state = cgs_set_guest_state;
+    cgs->set_guest_policy = cgs_set_guest_policy;
     cgs->get_mem_map_entry = cgs_get_mem_map_entry;
 
     QTAILQ_INIT(&sev_common->launch_vmsa);
@@ -1988,7 +2086,7 @@ sev_snp_launch_finish(SevSnpGuestState *sev_snp)
                                     sev_snp->host_data);
     ret = sev_ioctl(SEV_COMMON(sev_snp)->sev_fd, KVM_SEV_SNP_LAUNCH_FINISH,
                     finish, &error);
-    if (ret) {
+    if (ret || error) {
         error_report("%s: SNP_LAUNCH_FINISH ret=%d fw_error=%d '%s'",
                      __func__, ret, error, fw_error_to_str(error));
         exit(1);
