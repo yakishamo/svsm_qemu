@@ -29,6 +29,7 @@ static inline int igvm_file_init(ConfidentialGuestSupport *cgs, Error **errp)
 
 static inline int igvm_process(ConfidentialGuestSupport *cgs, Error **errp)
 {
+    return 0;
 }
 
 #endif
