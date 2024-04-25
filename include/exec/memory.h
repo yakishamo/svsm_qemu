@@ -2550,6 +2550,8 @@ void memory_global_dirty_log_sync(bool last_stage);
  */
 void memory_global_after_dirty_log_sync(void);
 
+hwaddr memory_region_to_absolute_addr(MemoryRegion *mr, hwaddr offset);
+
 /**
  * memory_region_transaction_begin: Start a transaction.
  *

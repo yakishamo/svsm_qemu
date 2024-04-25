@@ -986,6 +986,15 @@
 #     TD guest cannot get TD quoting for attestation if QGS is not
 #     provided.  So admin should always provide it.
 #
+# @num-l2-vms: command-line option to specify number of L2 VMs that
+#     will be supported by the TD guest.
+#
+# @svsm: whether SVSM is used as L1 TD
+#
+# @svsmbase: SVSM's starting GPA
+#
+# @svsmsize: size of SVSM
+#
 # Since: 9.0
 ##
 { 'struct': 'TdxGuestProperties',
@@ -993,7 +1002,11 @@
             '*mrconfigid': 'str',
             '*mrowner': 'str',
             '*mrownerconfig': 'str',
-            '*quote-generation-socket': 'SocketAddress' } }
+            '*quote-generation-socket': 'SocketAddress',
+            '*num-l2-vms': 'uint8',
+            '*svsm': 'bool',
+            '*svsmbase': 'uint64',
+            '*svsmsize': 'uint64' } }
 
 ##
 # @ThreadContextProperties:
